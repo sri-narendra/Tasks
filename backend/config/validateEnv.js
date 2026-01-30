@@ -12,7 +12,8 @@ const envSchema = z.object({
   PORT: z.string().transform(Number).default('3000'),
   MONGODB_URI: z.string().url("Invalid MongoDB URI"),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters long"),
-  CORS_ORIGIN: z.string().default('http://localhost:5173'), // Default to standard Vite port
+  CORS_ORIGIN: z.string().default('http://localhost:5173'), 
+  ALLOWED_ORIGINS: z.string().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 
