@@ -4,5 +4,5 @@ const isDev = window.location.hostname === 'localhost' || window.location.hostna
 export const CONFIG = {
     // Localhost -> Local Backend
     // GitHub Pages (or anywhere else) -> Render Backend
-    BACKEND_URL: isDev ? 'http://localhost:3000' : 'https://tasksapp-8zc3.onrender.com'
+    BACKEND_URL: isDev ? 'http://localhost:3000' : 'https://task-app-backend-fvs9.onrender.com'
 };
