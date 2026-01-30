@@ -1,4 +1,3 @@
-import './auth.css';
 import { fetchBoards, fetchLists, fetchTasks } from './api.js';
 import { renderApp } from './ui.js';
 import * as UI from './ui.js';

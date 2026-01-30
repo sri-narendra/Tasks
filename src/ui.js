@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { api, fetchBoards, fetchLists, fetchTasks, refreshSession } from './api.js';
-import * as DOMPurify from 'dompurify';
+import DOMPurify from 'dompurify';
 
 export { refreshSession };
 
