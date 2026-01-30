@@ -77,9 +77,15 @@ app.use(cookieParser());
 
 app.use(cors({
     origin: (origin, callback) => {
-        const allowed = env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',') : [];
-        if (!origin || allowed.includes(origin) || env.NODE_ENV !== 'production') callback(null, true);
-        else callback(new Error('Not allowed by CORS'));
+        const allowed = env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map(o => o.trim().replace(/\/$/, '')) : [];
+        const strippedOrigin = origin ? origin.replace(/\/$/, '') : null;
+        
+        if (!origin || allowed.includes(strippedOrigin) || env.NODE_ENV !== 'production') {
+            callback(null, true);
+        } else {
+            logger.warn({ origin, allowed }, 'CORS Blocked');
+            callback(new Error('Not allowed by CORS'));
+        }
     },
     credentials: true
 }));

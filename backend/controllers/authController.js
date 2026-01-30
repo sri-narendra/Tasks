@@ -34,8 +34,8 @@ const setTokenCookie = (res, token) => {
         httpOnly: true,
         secure: env.NODE_ENV === 'production', 
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        sameSite: 'strict', // CSRF protection helper
-        path: '/api/auth' // Scope cookie to auth routes only
+        sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' required for cross-domain cookies
+        path: '/api/auth'
     };
     res.cookie('refreshToken', token, cookieOptions);
 };
