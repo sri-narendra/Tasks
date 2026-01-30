@@ -433,7 +433,7 @@ async function checkDueTasks() {
 
         new Notification('Task Reminder', {
             body: `"${task.title}" is due soon!`,
-            icon: '/favicon.ico'
+            icon: 'favicon.ico'
         });
         localStorage.setItem(metaKey, 'true');
     });
