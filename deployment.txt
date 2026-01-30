@@ -1,0 +1,41 @@
+🚀 DEPLOYMENT GUIDE - TASKS APP
+
+This guide outlines the steps to deploy the Tasks App with a GitHub Pages frontend and a Render backend.
+
+---
+1. BACKEND DEPLOYMENT (RENDER)
+---
+1. Create a Account on Render.com
+2. Click "New" > "Blueprint" (since we have a render.yaml).
+3. Connect your GitHub repository: https://github.com/sri-narendra/Tasks.git
+4. Render will automatically detect the 'render.yaml' file.
+5. You will be prompted to fill in the environment variables:
+   - MONGODB_URI: Your MongoDB Atlas connection string.
+   - JWT_SECRET: (Render will auto-generate this if left blank).
+   - ALLOWED_ORIGINS: Your future GitHub Pages URL (e.g., https://sri-narendra.github.io/Tasks).
+6. Click "Apply". Render will start the build (cd backend && npm install) and deploy (node server.js).
+
+---
+2. FRONTEND DEPLOYMENT (GITHUB PAGES)
+---
+1. In your GitHub repository (https://github.com/sri-narendra/Tasks.git), go to "Settings" > "Pages".
+2. Under "Build and deployment" > "Source", select "Deploy from a branch".
+3. Select the 'main' branch and the '/(root)' folder.
+4. Click "Save". GitHub will start a build action.
+5. Once complete, your site will be live at: https://sri-narendra.github.io/Tasks
+
+---
+3. POST-DEPLOYMENT CONFIGURATION
+---
+1. Once your Render backend is live (e.g., https://tasksapp-xxxx.onrender.com), copy that URL.
+2. Open 'src/config.js' in your code.
+3. Update the 'BACKEND_URL' for production to match your Render URL.
+4. Commit and push the change to GitHub.
+5. GitHub Pages and Render will both auto-redeploy with the correct routing.
+
+---
+✅ TROUBLESHOOTING
+---
+- If the frontend shows a "Network Error", ensure the Render backend is active and the URL starts with https://
+- Ensure the Render URL in config.js DOES NOT end with a trailing slash (/) as the api.js adds '/api' automatically.
+- Check Render Logs for any "EADDRINUSE" or "MONGODB CONNECTION" errors.
