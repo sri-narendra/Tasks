@@ -19,11 +19,11 @@ STEP 1: DEPLOY BACKEND (RENDER)
 ---
 STEP 2: UPDATE FRONTEND CODE
 ---
-1. In your local folder (or GitHub editor), open `src/config.js`.
+1. In your local folder (or GitHub editor), open `config.js`.
 2. Find the `BACKEND_URL` line.
 3. Replace the placeholder with the REAL link you copied in Step 1:
    
-   // --- src/config.js ---
+   // --- config.js ---
    BACKEND_URL: isDev ? 'http://localhost:3000' : 'https://YOUR-RENDER-URL.onrender.com'
    
 4. Save, commit, and push this change to GitHub.
