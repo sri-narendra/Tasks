@@ -139,7 +139,8 @@ export async function fetchLists() {
     if (!data.error) state.lists = data;
 }
 
-export async function fetchTasks() {
-    const data = await api('/tasks');
+export async function fetchTasks(boardId = state.currentBoardId) {
+    const endpoint = boardId ? `/tasks?boardId=${boardId}` : '/tasks';
+    const data = await api(endpoint);
     if (!data.error) state.tasks = data;
 }

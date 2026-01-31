@@ -500,8 +500,11 @@ export function setView(view) {
     renderBoard(); // Update headers/content
 }
 
-export function switchBoard(boardId) {
+export async function switchBoard(boardId) {
     state.currentBoardId = boardId;
+    // Optimization: Only fetch tasks for THIS board
+    const { fetchTasks } = await import('./api.js');
+    await fetchTasks(boardId);
     setView('board');
 }
 

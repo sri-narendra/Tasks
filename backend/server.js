@@ -158,11 +158,23 @@ app.patch('/api/boards/:id',
 
 app.delete('/api/boards/:id', authorize(Board), async (req, res, next) => {
     try {
-        // Soft Delete
-        const board = await Board.findOneAndUpdate({ _id: req.params.id }, { deleted_at: new Date() });
-        // Cascade Soft Delete?
-        await List.updateMany({ board_id: req.params.id }, { deleted_at: new Date() });
-        await Task.updateMany({ list_id: { $in: (await List.find({ board_id: req.params.id })).map(l => l._id) } }, { deleted_at: new Date() });
+        const boardId = req.params.id;
+        const now = new Date();
+
+        // 1. Soft Delete Board
+        await Board.updateOne({ _id: boardId }, { deleted_at: now });
+
+        // 2. Soft Delete Lists and get their IDs
+        const lists = await List.find({ board_id: boardId, user_id: req.user.id }, { _id: 1 });
+        const listIds = lists.map(l => l._id);
+
+        await List.updateMany({ board_id: boardId }, { deleted_at: now });
+
+        // 3. Soft Delete Tasks in those lists
+        if (listIds.length > 0) {
+            await Task.updateMany({ list_id: { $in: listIds } }, { deleted_at: now });
+        }
+
         res.json({ success: true });
     } catch (err) { next(err); }
 });
@@ -227,12 +239,19 @@ app.delete('/api/lists/:id', authorize(List), async (req, res, next) => {
 // Tasks
 app.get('/api/tasks', async (req, res, next) => {
     try {
-        const { listId } = req.query;
-        if(listId) {
-            const list = await List.findOne({ _id: listId, user_id: req.user.id, deleted_at: null });
-            if(!list) return res.status(404).json({error:'List not found'});
+        const { listId, boardId } = req.query;
+        let query = { user_id: req.user.id, deleted_at: null };
+
+        if (listId) {
+            query.list_id = listId;
+        } else if (boardId) {
+            // Find all lists for this board first
+            const lists = await List.find({ board_id: boardId, user_id: req.user.id, deleted_at: null }, { _id: 1 });
+            const listIds = lists.map(l => l._id);
+            query.list_id = { $in: listIds };
         }
-        const tasks = await Task.find({ user_id: req.user.id, deleted_at: null, ...(listId && { list_id: listId }) }).sort({ position: 1 });
+
+        const tasks = await Task.find(query).sort({ position: 1 });
         res.json(tasks);
     } catch (err) { next(err); }
 });

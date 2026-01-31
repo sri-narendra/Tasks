@@ -37,10 +37,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const user = JSON.parse(localStorage.getItem('user')); // User info is ok in localStorage, not token
     
     if (user) {
-        await Promise.all([fetchBoards(), fetchLists(), fetchTasks()]);
+        await Promise.all([fetchBoards(), fetchLists()]);
         
         if (state.boards.length > 0) {
             state.currentBoardId = state.boards[0].id;
+            // Fetch tasks for the current board selectively
+            await fetchTasks(state.currentBoardId);
         }
         
         UI.renderApp();

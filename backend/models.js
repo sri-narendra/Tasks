@@ -78,6 +78,7 @@ const ListSchema = new Schema({
 });
 ListSchema.index({ board_id: 1, user_id: 1, deleted_at: 1 });
 ListSchema.index({ user_id: 1, _id: 1 });
+ListSchema.index({ user_id: 1, deleted_at: 1, board_id: 1 }); // For filtered fetches
 
 // --- TASK ---
 const TaskSchema = new Schema({
@@ -100,6 +101,8 @@ const TaskSchema = new Schema({
 TaskSchema.index({ list_id: 1, user_id: 1, deleted_at: 1 });
 TaskSchema.index({ user_id: 1, _id: 1 });
 TaskSchema.index({ parent_id: 1 });
+TaskSchema.index({ user_id: 1, deleted_at: 1, list_id: 1 }); // Fast list-to-task mapping
+TaskSchema.index({ user_id: 1, deleted_at: 1, completed: 1 }); // For archive/dashboard views
 
 // --- ATTACHMENT ---
 const AttachmentSchema = new Schema({
