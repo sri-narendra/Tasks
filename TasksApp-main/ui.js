@@ -1,11 +1,8 @@
 import { state } from './state.js';
-import { api, fetchBoards, fetchLists, fetchTasks, refreshSession } from './api.js';
-import DOMPurify from 'dompurify';
-
-export { refreshSession };
+import { api, fetchBoards, fetchLists, fetchTasks } from './api.js';
 
 // --- HELPERS ---
-export function calculateNextDueDate(currentDateStr, recurrenceStr) {
+function calculateNextDueDate(currentDateStr, recurrenceStr) {
     if (!currentDateStr || !recurrenceStr) return null;
     const date = new Date(currentDateStr);
     const [type, value] = recurrenceStr.split(':');
@@ -69,9 +66,13 @@ export function calculateNextDueDate(currentDateStr, recurrenceStr) {
 }
 
 // --- HELPERS ---
-export function sanitize(text) {
+function escapeHtml(text) {
     if (!text) return '';
-    return DOMPurify.sanitize(text);
+    return text.replace(/&/g, "&amp;")
+               .replace(/</g, "&lt;")
+               .replace(/>/g, "&gt;")
+               .replace(/"/g, "&quot;")
+               .replace(/'/g, "&#039;");
 }
 
 /* --- CUSTOM DIALOGS --- */
@@ -86,369 +87,6 @@ export function showToast(message) {
         toast.style.transform = 'translateY(10px)';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
-}
-
-/* --- SEARCH & ORGANIZATION --- */
-export function handleSearch(query) {
-    state.searchQuery = query.toLowerCase();
-    renderBoard();
-}
-
-export async function archiveBoard(id) {
-    try {
-        await api(`/boards/${id}`, 'PATCH', { archived: true });
-        const board = state.boards.find(b => b.id === id);
-        if (board) board.archived = true;
-        renderDrawer();
-        if (state.currentBoardId === id) setView('board');
-        showToast('Board archived');
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-export async function archiveList(id) {
-    try {
-        await api(`/lists/${id}`, 'PATCH', { archived: true });
-        const list = state.lists.find(l => l.id === id);
-        if (list) list.archived = true;
-        renderBoard();
-        showToast('List archived');
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-export async function unarchiveBoard(id) {
-    try {
-        await api(`/boards/${id}`, 'PATCH', { archived: false });
-        const board = state.boards.find(b => b.id === id);
-        if (board) board.archived = false;
-        renderDrawer();
-        if (state.currentView === 'archive') renderBoard();
-        showToast('Board restored');
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-export async function unarchiveList(id) {
-    try {
-        await api(`/lists/${id}`, 'PATCH', { archived: false });
-        const list = state.lists.find(l => l.id === id);
-        if (list) list.archived = false;
-        if (state.currentView === 'archive') renderBoard();
-        else renderBoard();
-        showToast('List restored');
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-/* --- SUBTASKS --- */
-export async function addSubtask(title, inputEl) {
-    if (!title.trim() || !state.activeTask) return;
-    try {
-        const subtask = await api('/tasks', 'POST', {
-            title: title.trim(),
-            listId: state.activeTask.list_id,
-            parent_id: state.activeTask.id
-        });
-        state.tasks.push(subtask);
-        inputEl.value = '';
-        renderSubtasks(state.activeTask.id);
-        renderBoard();
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-/* --- ATTACHMENTS --- */
-export async function handleAttachmentUpload(event) {
-    const file = event.target.files[0];
-    console.log('File selected:', file);
-    if (!file || !state.activeTask) {
-        console.log('No file or no active task');
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const fileUrl = e.target.result; // base64
-            console.log('File read, size:', fileUrl.length, 'bytes');
-            console.log('Uploading to task:', state.activeTask.id);
-            
-            const result = await api('/attachments', 'POST', {
-                taskId: state.activeTask.id,
-                fileName: file.name,
-                fileUrl: fileUrl,
-                fileType: file.type
-            });
-            console.log('Upload result:', result);
-            showToast('Attachment added');
-            await loadAttachments(state.activeTask.id);
-        } catch (err) {
-            console.error('Upload error:', err);
-            showToast(err.message);
-        }
-    };
-    reader.readAsDataURL(file);
-    event.target.value = ''; // Reset input
-}
-
-export async function addAttachmentUrl(url, inputEl) {
-    if (!url.trim() || !state.activeTask) {
-        console.log('No URL or no active task');
-        return;
-    }
-    try {
-        console.log('Adding URL attachment:', url);
-        const result = await api('/attachments', 'POST', {
-            taskId: state.activeTask.id,
-            fileName: url,
-            fileUrl: url,
-            fileType: 'url'
-        });
-        console.log('URL attachment result:', result);
-        inputEl.value = '';
-        showToast('Attachment added');
-        await loadAttachments(state.activeTask.id);
-    } catch (err) {
-        console.error('URL attachment error:', err);
-        showToast(err.message);
-    }
-}
-
-async function loadAttachments(taskId) {
-    try {
-        const attachments = await api(`/attachments/${taskId}`, 'GET');
-        renderAttachments(attachments);
-    } catch (err) {
-        console.error('Failed to load attachments:', err);
-    }
-}
-
-function renderAttachments(attachments) {
-    const container = document.getElementById('attachmentsList');
-    if (!container) {
-        console.error('Attachments container not found');
-        return;
-    }
-
-    console.log('Rendering attachments:', attachments);
-
-    if (!attachments || attachments.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px; padding: 8px 0;">No attachments</div>';
-        return;
-    }
-
-    container.innerHTML = attachments.map(a => `
-        <div class="attachment-item">
-            <span class="material-icons" style="font-size: 18px; color: var(--text-secondary)">${a.file_type === 'url' ? 'link' : 'attach_file'}</span>
-            <a href="${a.file_url}" target="_blank" class="attachment-name" title="${sanitize(a.file_name)}">${sanitize(a.file_name)}</a>
-            <span class="material-icons" style="font-size: 16px; cursor: pointer; color: var(--text-secondary)" onclick="window.app.deleteAttachment('${a.id}')">close</span>
-        </div>
-    `).join('');
-}
-
-export async function deleteAttachment(id) {
-    try {
-        await api(`/attachments/${id}`, 'DELETE');
-        showToast('Attachment removed');
-        if (state.activeTask) await loadAttachments(state.activeTask.id);
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-function renderArchiveView(container) {
-    container.innerHTML = `
-        <div style="padding: 24px; color: var(--text-primary); width: 100%;">
-            <h2>Archived Boards</h2>
-            <div id="archivedBoardsList" style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 32px;">
-                ${state.boards.filter(b => b.archived).map(b => `
-                    <div class="list-column" style="min-width: 200px; padding: 16px;">
-                        <div style="font-weight: 500; margin-bottom: 12px;">${sanitize(b.title)}</div>
-                        <button class="btn btn-primary" onclick="window.app.unarchiveBoard('${b.id}')">Unarchive</button>
-                    </div>
-                `).join('') || '<div style="color: var(--text-secondary)">No archived boards</div>'}
-            </div>
-
-            <h2>Archived Lists</h2>
-            <div id="archivedListsList" style="display: flex; gap: 12px; flex-wrap: wrap;">
-                ${state.lists.filter(l => l.archived).map(l => {
-                    const b = state.boards.find(board => board.id === l.board_id);
-                    return `
-                        <div class="list-column" style="min-width: 200px; padding: 16px;">
-                            <div style="font-weight: 500; margin-bottom: 4px;">${sanitize(l.title)}</div>
-                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px;">Board: ${b ? sanitize(b.title) : 'Unknown'}</div>
-                            <button class="btn btn-primary" onclick="window.app.unarchiveList('${l.id}')">Unarchive</button>
-                        </div>
-                    `;
-                }).join('') || '<div style="color: var(--text-secondary)">No archived lists</div>'}
-            </div>
-        </div>
-    `;
-}
-
-export async function toggleSubtask(id) {
-    const task = state.tasks.find(t => t.id === id);
-    if (!task) return;
-    try {
-        const completed = !task.completed;
-        const updated = await api(`/tasks/${id}`, 'PATCH', { completed });
-        Object.assign(task, updated);
-        renderSubtasks(state.activeTask.id);
-        renderBoard();
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-export async function deleteSubtask(id) {
-    try {
-        await api(`/tasks/${id}`, 'DELETE');
-        state.tasks = state.tasks.filter(t => t.id !== id);
-        renderSubtasks(state.activeTask.id);
-        renderBoard();
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-export async function renameSubtask(id, newTitle) {
-    const task = state.tasks.find(t => t.id === id);
-    if (!task || !newTitle.trim()) return;
-    try {
-        const updated = await api(`/tasks/${id}`, 'PATCH', { title: newTitle.trim() });
-        Object.assign(task, updated);
-        renderBoard();
-    } catch (err) {
-        showToast(err.message);
-    }
-}
-
-export function renderSubtasks(taskId) {
-    const container = document.getElementById('subtasksList');
-    if (!container) return;
-    
-    const subtasks = state.tasks.filter(t => t.parent_id === taskId);
-    container.innerHTML = subtasks.map(s => `
-        <div class="subtask-item">
-            <div class="task-checkbox ${s.completed ? 'checked' : ''}" 
-                 onclick="window.app.toggleSubtask('${s.id}')"></div>
-            <input type="text" class="subtask-text ${s.completed ? 'completed' : ''}" 
-                   value="${sanitize(s.title)}" 
-                   onchange="window.app.renameSubtask('${s.id}', this.value)"
-                   onkeydown="if(event.key==='Enter') this.blur()">
-            <span class="material-icons" style="font-size:16px;cursor:pointer;color:var(--text-secondary)" 
-                  onclick="window.app.deleteSubtask('${s.id}')">close</span>
-        </div>
-    `).join('');
-
-    updateSubtaskProgress(subtasks);
-}
-
-/* --- KEYBOARD SHORTCUTS --- */
-export function initKeyboardShortcuts() {
-    window.addEventListener('keydown', (e) => {
-        // 1. Search (Ctrl/Cmd + K)
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-            e.preventDefault();
-            const searchInput = document.getElementById('globalSearch');
-            if (searchInput) searchInput.focus();
-        }
-
-        // 2. New Board (Alt + N)
-        if (e.altKey && e.key === 'n') {
-            e.preventDefault();
-            createNewBoard();
-        }
-
-        // 3. New List (Alt + L)
-        if (e.altKey && e.key === 'l') {
-            e.preventDefault();
-            createNewList();
-        }
-
-        // 4. Close (Esc)
-        if (e.key === 'Escape') {
-            if (state.activeTask) closeDetails();
-            const modal = document.getElementById('customModal');
-            if (modal && modal.classList.contains('active')) modal.classList.remove('active');
-            const dropdowns = document.querySelectorAll('.dropdown-menu.active');
-            dropdowns.forEach(d => d.classList.remove('active'));
-        }
-
-        // 5. Help (?)
-        if (e.key === '?' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-            showShortcutsHelp();
-        }
-    });
-
-    console.log('Shortcuts initialized');
-}
-
-export function showShortcutsHelp() {
-    const helpText = `
-        Keyboard Shortcuts:
-        - Ctrl + K: Focus Search
-        - Alt + N: Create New Board
-        - Alt + L: Create New List
-        - Esc: Close Details / Modals
-        - ?: Show this help
-    `;
-    showModal({ title: 'Keyboard Shortcuts', showInput: false, initialValue: helpText, confirmText: 'Got it' });
-}
-
-/* --- NOTIFICATIONS --- */
-export function initNotifications() {
-    if (!("Notification" in window)) return;
-    
-    // Check every 5 minutes
-    setInterval(checkDueTasks, 5 * 60 * 1000);
-    checkDueTasks(); // Initial check
-}
-
-async function checkDueTasks() {
-    if (Notification.permission === 'default') {
-        const res = await Notification.requestPermission();
-        if (res !== 'granted') return;
-    }
-    if (Notification.permission !== 'granted') return;
-
-    const now = new Date();
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-
-    const upcomingTasks = state.tasks.filter(t => {
-        if (!t.due_date || t.completed) return false;
-        const dueDate = new Date(t.due_date);
-        return dueDate > now && dueDate <= oneHourFromNow;
-    });
-
-    upcomingTasks.forEach(task => {
-        const metaKey = `notified_${task.id}_${task.due_date}`;
-        if (localStorage.getItem(metaKey)) return;
-
-        new Notification('Task Reminder', {
-            body: `"${task.title}" is due soon!`,
-            icon: 'favicon.ico'
-        });
-        localStorage.setItem(metaKey, 'true');
-    });
-}
-
-function updateSubtaskProgress(subtasks) {
-    const bar = document.getElementById('subtaskProgress');
-    if (!bar) return;
-    if (subtasks.length === 0) {
-        bar.style.width = '0%';
-        return;
-    }
-    const completedCount = subtasks.filter(s => s.completed).length;
-    const percent = Math.round((completedCount / subtasks.length) * 100);
-    bar.style.width = `${percent}%`;
 }
 
 export function showModal({ title, placeholder = '', initialValue = '', confirmText = 'OK', showInput = true }) {
@@ -508,15 +146,13 @@ export function switchBoard(boardId) {
 // --- DRAWER ---
 function renderDrawer() {
      const container = document.getElementById('drawerBoards');
-     if (!container) return;
-     const visibleBoards = state.boards.filter(b => !b.archived);
-     container.innerHTML = visibleBoards.map(board => `
+     container.innerHTML = state.boards.map(board => `
          <div class="drawer-item ${state.currentBoardId === board.id && state.currentView === 'board' ? 'active' : ''}" 
               onclick="window.app.switchBoard('${board.id}')"
               ondragover="event.preventDefault()"
               ondrop="window.app.handleCrossBoardDrop(event, '${board.id}')">
             <span class="drawer-icon">dashboard</span>
-            <span class="drawer-label">${sanitize(board.title)}</span>
+            <span class="drawer-label">${escapeHtml(board.title)}</span>
             <span class="material-icons board-menu-trigger" onclick="window.app.showBoardMenu('${board.id}', event)">more_vert</span>
          </div>
      `).join('');
@@ -594,24 +230,8 @@ export function showBoardMenu(boardId, event) {
     }
 
     const rect = event.target.getBoundingClientRect();
-    
-    // Calculate menu height (approximate)
-    const menuHeight = 450; // Approximate height of the full menu
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    
-    // Position menu above if not enough space below
-    if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
-        menu.style.bottom = `${window.innerHeight - rect.top + 5}px`;
-        menu.style.top = 'auto';
-    } else {
-        menu.style.top = `${rect.bottom + 5}px`;
-        menu.style.bottom = 'auto';
-    }
-    
+    menu.style.top = `${rect.bottom + 5}px`;
     menu.style.left = `${Math.min(rect.left, window.innerWidth - 220)}px`;
-    menu.style.maxHeight = `${Math.min(menuHeight, window.innerHeight - 20)}px`;
-    menu.style.overflowY = 'auto';
 
     const quickColors = ['', '#1a73e8', '#c5221f', '#f29900', '#188038', '#8e24aa', '#a142f4', '#00796b', '#3f51b5', '#455a64'];
     const isImage = board.background && (board.background.startsWith('data:') || board.background.startsWith('http'));
@@ -651,9 +271,6 @@ export function showBoardMenu(boardId, event) {
         </div>
         
         <div class="dropdown-divider"></div>
-        <div class="dropdown-item" onclick="window.app.archiveBoard('${boardId}')">
-            <span class="material-icons">archive</span> Archive Board
-        </div>
         <div class="dropdown-item" style="color: #d93025;" onclick="window.app.deleteBoardFromMenu()">
             <span class="material-icons" style="color: #d93025;">delete</span> Delete Board
         </div>
@@ -782,8 +399,8 @@ export async function handleBoardBackgroundImageUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-        showToast("Image too large (max 10MB)");
+    if (file.size > 50 * 1024 * 1024) {
+        showToast("Image too large (max 50MB)");
         return;
     }
 
@@ -901,10 +518,7 @@ function renderBoard() {
              container.innerHTML = '<div style="padding: 24px;">Please create a board.</div>';
              return;
          }
-         relevantLists = state.lists.filter(l => l.board_id === state.currentBoardId && !l.archived);
-    } else if (state.currentView === 'archive') {
-         renderArchiveView(container);
-         return;
+         relevantLists = state.lists.filter(l => l.board_id === state.currentBoardId);
     }
     
     // 1. BOARD VIEW Logic
@@ -972,18 +586,14 @@ function renderListColumn(list, container, filteredTasks = null, readOnly = fals
      
      // Apply List Color
      if (list.color) {
+         // Apply to background with slight opacity for readability if desired, 
+         // but user said "total list", so let's go with a themed background approach.
          listEl.style.backgroundColor = list.color;
+         // If a background color is set, we might want to adjust border-top too for accent
          listEl.style.borderTopColor = 'rgba(0,0,0,0.1)';
      }
 
-     // Filter tasks: No subtasks in main list, plus apply search if any
-     let allTasks = filteredTasks || state.tasks.filter(t => t.list_id === list.id && !t.parent_id);
-     if (state.searchQuery) {
-         allTasks = allTasks.filter(t => 
-             t.title.toLowerCase().includes(state.searchQuery) || 
-             (t.description && t.description.toLowerCase().includes(state.searchQuery))
-         );
-     }
+     const allTasks = filteredTasks || state.tasks.filter(t => t.list_id === list.id);
      
      // SPLIT LOGIC
      const activeTasks = allTasks.filter(t => !t.completed);
@@ -1000,7 +610,7 @@ function renderListColumn(list, container, filteredTasks = null, readOnly = fals
 
       listEl.innerHTML = `
           <div class="list-header">
-              <span class="list-title" ${!readOnly ? `ondblclick="window.app.renameList('${list.id}')"` : ''}>${sanitize(list.title)}</span>
+              <span class="list-title" ${!readOnly ? `ondblclick="window.app.renameList('${list.id}')"` : ''}>${escapeHtml(list.title)}</span>
               ${!readOnly ? `<span class="material-icons list-menu" onclick="window.app.showListMenu('${list.id}', event)">more_vert</span>` : ''}
           </div>
       `;
@@ -1111,8 +721,8 @@ function createTaskEl(task, taskColor = null) {
         <div class="task-checkbox ${task.completed ? 'checked' : ''}" 
              onclick="window.app.toggleTaskStatus('${task.id}')"></div>
         <div class="task-info">
-            <div class="task-title ${task.completed ? 'completed' : ''}">${sanitize(task.title)}</div>
-            ${task.description ? `<div class="task-desc-preview">${sanitize(task.description)}</div>` : ''}
+            <div class="task-title ${task.completed ? 'completed' : ''}">${escapeHtml(task.title)}</div>
+            ${task.description ? `<div class="task-desc-preview">${escapeHtml(task.description)}</div>` : ''}
             <div class="task-meta">
                 ${dateStr ? `<div class="chip">${dateStr}</div>` : ''}
                 ${task.recurrence ? `<span class="material-icons" style="font-size: 14px; color: var(--text-secondary);">update</span>` : ''}
@@ -1314,8 +924,6 @@ export function openDetails(id) {
         el.onblur = saveDetails;
     });
 
-    renderSubtasks(id);
-    loadAttachments(id);
     panel.classList.add('open');
 }
 
@@ -1449,9 +1057,6 @@ export function showListMenu(listId, event) {
         </div>
         
         <div class="dropdown-divider"></div>
-        <div class="dropdown-item" onclick="window.app.archiveList('${listId}')">
-            <span class="material-icons">archive</span> Archive list
-        </div>
         <div class="dropdown-item" onclick="window.app.deleteCompletedTasks('${listId}')" style="color: #ea4335;">
             <span class="material-icons" style="color: inherit;">cleaning_services</span> Delete completed tasks
         </div>
@@ -1591,131 +1196,12 @@ export function initTheme() {
     renderLayoutClasses();
 }
 
-
-/* --- AUTHENTICATION UI --- */
-let isRegisterMode = false;
-
-export function showAuthModal() {
-    // Auth is now a full-screen landing page managed by updateAuthUI
-    updateAuthUI();
-}
-
-import { login, register, logout as apiLogout } from './api.js';
-
-export function switchAuthMode() {
-    const title = document.getElementById('authTitle');
-    const subtitle = document.getElementById('authSubtitle');
-    const submitBtn = document.getElementById('authSubmitBtn');
-    const switchBtn = document.getElementById('authSwitchBtn');
-    const promptText = document.getElementById('authPromptText');
-    
-    isRegisterMode = !isRegisterMode;
-    
-    if (isRegisterMode) {
-        title.textContent = 'Create Account';
-        subtitle.innerHTML = 'Join Task Master today.<br><small style="opacity: 0.8; font-size: 12px;">Password: 8+ chars, 1 uppercase, 1 number, 1 special char</small>';
-        submitBtn.textContent = 'Create Account';
-        promptText.textContent = 'Already have an account?';
-        switchBtn.textContent = 'Sign In';
-    } else {
-        title.textContent = 'Task Master';
-        subtitle.textContent = 'Organize your life, one list at a time.';
-        submitBtn.textContent = 'Sign In';
-        promptText.textContent = "Don't have an account?";
-        switchBtn.textContent = 'Create account';
-    }
-}
-
-export async function handleAuthSubmit() {
-    const email = document.getElementById('authEmail').value;
-    const password = document.getElementById('authPassword').value;
-    const errorEl = document.getElementById('authError');
-    
-    if (!email || !password) {
-        errorEl.textContent = 'Email and password required';
-        errorEl.classList.remove('hidden');
-        return;
-    }
-
-    errorEl.classList.add('hidden');
-    const result = isRegisterMode ? await register(email, password) : await login(email, password);
-    
-    if (result.error) {
-        if (result.details && Array.isArray(result.details)) {
-            // Flatten Zod errors into a readable list
-            const messages = result.details.map(d => d.message).join('. ');
-            errorEl.textContent = messages;
-        } else {
-            errorEl.textContent = result.error;
-        }
-        errorEl.classList.remove('hidden');
-    } else {
-        showToast(isRegisterMode ? 'Account created!' : 'Logged in!');
-        window.location.reload(); 
-    }
-}
-
-export async function logout() {
-    await apiLogout();
-}
-
-export function updateAuthUI() {
-    const user = JSON.parse(localStorage.getItem('user'));
-    
-    const authView = document.getElementById('authView');
-    const appView = document.getElementById('appView');
-    const loginBtn = document.getElementById('loginBtn');
-    const userProfile = document.getElementById('userProfile');
-    const userEmail = document.getElementById('userEmail');
-    const userInitial = document.getElementById('userInitial');
-    
-    if (user) {
-        authView?.classList.add('hidden');
-        appView?.classList.remove('hidden');
-        loginBtn?.classList.add('hidden'); // Hide obsolete button
-        
-        if (userProfile) userProfile.classList.remove('hidden');
-        if (userEmail) userEmail.textContent = user.email;
-        if (userInitial) userInitial.textContent = user.email[0].toUpperCase();
-    } else {
-        authView?.classList.remove('hidden');
-        appView?.classList.add('hidden');
-        loginBtn?.classList.add('hidden'); // Also hide when in landing page
-        
-        if (userProfile) userProfile.classList.add('hidden');
-    }
-}
-
-export function toggleProfileMenu(event) {
-    if (event) event.stopPropagation();
-    const menu = document.getElementById('profileMenu');
-    
-    if (menu.classList.contains('active')) {
-        menu.classList.remove('active');
-    } else {
-        const rect = document.getElementById('userProfile').getBoundingClientRect();
-        menu.style.top = `${rect.bottom + 8}px`;
-        menu.style.right = '16px';
-        menu.classList.add('active');
-        
-        const close = (e) => {
-            if (menu.contains(e.target)) return; // Allow internal clicks
-            menu.classList.remove('active');
-            document.removeEventListener('click', close);
-        };
-        setTimeout(() => document.addEventListener('click', close), 10);
-    }
-}
-
 export function toggleTheme() {
     let isDark = document.body.classList.contains('dark-theme');
     if (!isDark && !document.body.classList.contains('light-theme')) {
         isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
 
-    // Reset custom theme when manually toggling light/dark
-    setCustomTheme('default');
-    
     if (isDark) {
         document.body.classList.remove('dark-theme');
         document.body.classList.add('light-theme');
@@ -1731,25 +1217,6 @@ export function toggleTheme() {
 
 function updateThemeIcon(isDark) {
     document.getElementById('themeIcon').textContent = isDark ? 'light_mode' : 'dark_mode';
-}
-
-export function setCustomTheme(themeName) {
-    if (themeName === 'default') {
-        document.body.removeAttribute('data-theme');
-        localStorage.removeItem('customTheme');
-    } else {
-        document.body.setAttribute('data-theme', themeName);
-        localStorage.setItem('customTheme', themeName);
-    }
-}
-
-export function initCustomTheme() {
-    const savedTheme = localStorage.getItem('customTheme');
-    if (savedTheme) {
-        document.body.setAttribute('data-theme', savedTheme);
-        const selector = document.getElementById('themeSelector');
-        if (selector) selector.value = savedTheme;
-    }
 }
 
 export function toggleLayout() {
@@ -1845,33 +1312,6 @@ async function importList(title, items) {
     await api('/tasks/bulk', 'POST', { tasks: tasksToImport });
 }
 
-// --- LIST MENU WRAPPERS (For index.html static menu) ---
-export function renameListFromMenu() {
-    // Legacy support or if there's an active list context
-    // This assumes the static menu in index.html is used with some global context
-    // But currently showListMenu creates a dynamic one. 
-    // We'll define these to prevent crash, and maybe log warning or handle if needed.
-    console.warn("renameListFromMenu called");
-}
-
-export function updateListColor(color) {
-    console.warn("updateListColor called", color);
-}
-
-export function deleteListFromMenu() {
-    console.warn("deleteListFromMenu called");
-}
-
-// --- Event Listeners for API Resilience ---
-window.addEventListener('app:auth-expired', () => {
-    showToast('Session expired. Please log in again.');
-    setTimeout(() => window.location.reload(), 1500);
-});
-
-window.addEventListener('app:network-error', (e) => {
-    showToast(e.detail?.message || 'Network error. Please check your connection.');
-});
-
 // --- ACTIONS FOR HTML ---
 export const actions = {
     setView,
@@ -1907,32 +1347,5 @@ export const actions = {
     deleteBoardFromMenu,
     applyBoardBackground,
     previewBoardBackground,
-    setBoardBackground,
-    handleSearch,
-    addSubtask,
-    toggleSubtask,
-    deleteSubtask,
-    renameSubtask,
-    archiveBoard,
-    archiveList,
-    unarchiveBoard,
-    unarchiveList,
-    showAuthModal,
-    switchAuthMode,
-    handleAuthSubmit,
-    logout,
-    updateAuthUI,
-    toggleProfileMenu,
-    closeDetails,
-    deleteCurrentTask,
-    renameListFromMenu,
-    updateListColor, // Use the wrapper
-    deleteListFromMenu,
-    initKeyboardShortcuts,
-    initNotifications,
-    showShortcutsHelp,
-    setCustomTheme,
-    handleAttachmentUpload,
-    addAttachmentUrl,
-    deleteAttachment
+    setBoardBackground
 };

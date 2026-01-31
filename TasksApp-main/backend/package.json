@@ -1,0 +1,15 @@
+{
+  "name": "google-tasks-backend",
+  "version": "1.0.0",
+  "description": "Backend for Google Tasks Clone",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "@supabase/supabase-js": "^2.0.0"
+  }
+}

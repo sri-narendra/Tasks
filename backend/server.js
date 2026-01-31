@@ -360,9 +360,38 @@ app.patch('/api/tasks/:id', validateSchema(Schemas.UpdateTaskSchema), authorize(
     } catch (err) { next(err); }
 });
 
+app.patch('/api/tasks/reorder', validateSchema(Schemas.ReorderSchema), async (req, res, next) => {
+    try {
+        const { orderedIds } = req.body;
+        // Verify ownership of all tasks
+        const count = await Task.countDocuments({ _id: { $in: orderedIds }, user_id: req.user.id, deleted_at: null });
+        if (count !== orderedIds.length) return res.status(403).json({ error: 'Access denied' });
+        
+        await Promise.all(orderedIds.map((id, index) => 
+            Task.findOneAndUpdate({ _id: id }, { position: index })
+        ));
+        res.json({ success: true });
+    } catch (err) { next(err); }
+});
+
 app.delete('/api/tasks/:id', authorize(Task), async (req, res, next) => {
     try {
         await Task.findOneAndUpdate({ _id: req.params.id }, { deleted_at: new Date() });
+        res.json({ success: true });
+    } catch (err) { next(err); }
+});
+
+app.delete('/api/tasks/completed/:listId', async (req, res, next) => {
+    try {
+        const { listId } = req.params;
+        // Verify list ownership
+        const list = await List.findOne({ _id: listId, user_id: req.user.id, deleted_at: null });
+        if (!list) return res.status(404).json({ error: 'List not found' });
+        
+        await Task.updateMany(
+            { list_id: listId, user_id: req.user.id, completed: true, deleted_at: null },
+            { deleted_at: new Date() }
+        );
         res.json({ success: true });
     } catch (err) { next(err); }
 });

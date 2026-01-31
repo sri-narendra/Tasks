@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tasks Clone</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- SortableJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+        /* --- CSS VARIABLES (THEMING) --- */
+        :root {
+            /* Light Mode Default */
+            --primary: #4285f4;
+            --bg-color: #f6f8fc;
+            --surface: #ffffff;
+            --text-primary: #202124;
+            --text-secondary: #5f6368;
+            --border: #dadce0;
+            --hover: #f1f3f4;
+            --sidebar-bg: #ffffff;
+            --drawer-width: 260px;
+            --drawer-mini-width: 72px;
+            --shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+            --modal-overlay: rgba(0,0,0,0.4);
+            --scrollbar-thumb: #dadce0;
+            --scrollbar-track: transparent;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                /* Dark Mode Override - Swapped and adjusted for contrast */
+                --bg-color: #2d2e31;  /* Previously surface */
+                --surface: #101114;   /* Darker Black */
+                --text-primary: #e8eaed;
+                --text-secondary: #9aa0a6;
+                --border: #3c4043;
+                --hover: #202124;
+                --sidebar-bg: #101114; /* Match surface for black/grey interchange */
+                --shadow: 0 1px 2px 0 rgba(0,0,0,0.8);
+            }
+        }
+
+        * { box-sizing: border-box; outline: none; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- LAYOUT --- */
+        
+        /* Navigation Drawer */
+        .drawer {
+            width: var(--drawer-width);
+            background: var(--sidebar-bg);
+            border: none;
+            display: flex;
+            flex-direction: column;
+            padding-top: 10px;
+            transition: width 0.3s ease;
+            flex-shrink: 0;
+            z-index: 20;
+            overflow-x: hidden;
+        }
+        
+        .drawer.closed {
+            width: var(--drawer-mini-width);
+        }
+        
+        .drawer-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 24px;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 0 24px 24px 0;
+            margin-right: 12px;
+            white-space: nowrap;
+            height: 48px;
+            transition: padding 0.3s;
+        }
+
+        .drawer.closed .drawer-item {
+            padding: 12px 0;
+            justify-content: center;
+            margin-right: 0;
+            border-radius: 0;
+        }
+
+        .drawer-label {
+            transition: opacity 0.2s;
+            opacity: 1;
+            flex-grow: 1;
+        }
+
+        .drawer.closed .drawer-label {
+            display: none;
+        }
+        
+        .drawer-item:hover { background-color: var(--hover); }
+        
+        .drawer-item.active {
+            background-color: #e8f0fe; /* Light blue tint */
+            color: var(--primary);
+        }
+        @media (prefers-color-scheme: dark) {
+            .drawer-item.active { background-color: #41331c; color: #fdd663; }
+        }
+        
+        .drawer-icon {
+            font-family: 'Material Icons';
+            font-size: 24px;
+            margin-right: 24px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+            width: 24px;
+            text-align: center;
+            transition: margin 0.3s;
+        }
+        
+        .drawer.closed .drawer-icon {
+            margin-right: 0;
+        }
+        .drawer-item.active .drawer-icon { color: inherit; }
+
+        .drawer-divider {
+            height: 1px;
+            background-color: var(--border);
+            margin: 8px 0;
+            transition: margin 0.3s;
+        }
+        .drawer.closed .drawer-divider {
+             margin: 8px 12px;
+        }
+
+        .drawer-section-header {
+            padding: 12px 24px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+        
+        .drawer.closed .drawer-section-header {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            transition: background-color 0.3s;
+        }
+
+        /* Navbar */
+        .navbar {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            background-color: var(--surface);
+            border: none;
+        }
+
+        .menu-btn, .nav-icon-btn {
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            border: none;
+            background: transparent;
+        }
+        .menu-btn:hover, .nav-icon-btn:hover { background: var(--hover); }
+
+        .current-view-title {
+            font-size: 22px;
+            color: var(--text-primary);
+            flex-grow: 1;
+            margin-left: 8px;
+        }
+
+        /* Board (Kanban) - Horizontal Default */
+        .board-container {
+            flex-grow: 1;
+            padding: 24px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            background: var(--bg-color);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            transition: background 0.5s ease;
+        }
+
+        /* Vertical View (List Mode) */
+        .board-container.vertical-view {
+            flex-direction: column;
+            overflow-x: hidden;
+            overflow-y: auto;
+            align-items: center; /* Center lists */
+            padding-bottom: 60px;
+        }
+        
+        .board-container.vertical-view .list-column {
+            width: 100%;
+            max-width: 600px; /* Wider in vertical mode */
+            margin-bottom: 24px;
+            max-height: none; /* Let it grow */
+            flex-shrink: 0;
+        }
+        
+        .board-container.vertical-view .tasks-container,
+        .board-container.vertical-view .list-body {
+            max-height: none; 
+            overflow-y: visible;
+        }
+
+        .board-container.vertical-view .new-list-column {
+            width: 100%;
+            max-width: 600px;
+        }
+
+        /* List Column Base - No fixed height in flow, handled by container */
+        .list-column {
+            background: var(--surface);
+            min-width: 300px;
+            max-width: 300px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            border: none;
+            flex-shrink: 0;
+            max-height: 100%;
+            overflow: hidden; /* Header pins, body scrolls */
+            transition: border-top 0.3s, background 0.3s, background-color 0.3s;
+            border-top: 4px solid transparent; /* Keep for accent if needed or set to none */
+        }
+
+        .list-body {
+            flex-grow: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0; /* Important for flex-grow scroll */
+            padding-bottom: 12px;
+        }
+
+        .list-header {
+            padding: 16px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 500;
+            cursor: grab;
+        }
+        
+        .list-title { flex-grow: 1; cursor: pointer; }
+
+        .list-menu {
+            color: var(--text-secondary);
+            cursor: pointer;
+            opacity: 0;
+        }
+        .list-column:hover .list-menu { opacity: 1; }
+
+        .add-task-wrapper { 
+            padding: 0 12px 4px 12px; 
+            margin-bottom: 12px; 
+        }
+        .add-task-input {
+            width: 100%;
+            max-width: 270px; /* Match task-card */
+            background: var(--hover);
+            border: none;
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .tasks-container, .completed-tasks-container, .add-task-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Center contents for roomy board */
+            width: 100%;
+            padding: 0 4px;
+            min-height: 1px;
+        }
+
+
+        /* Task Card */
+        .task-card {
+            background: var(--surface); /* Or slight contrast? */
+            border: none;
+            border-radius: 12px; /* Increased from 8px */
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            cursor: pointer; /* Click for details */
+            box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 270px; /* Snug fit for 300px list */
+        }
+
+        .task-checkbox {
+            width: 18px; height: 18px;
+            border: 2px solid var(--text-secondary);
+            border-radius: 50%;
+            margin-right: 12px;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .task-checkbox.checked {
+            background: var(--primary); border-color: var(--primary);
+        }
+        
+        .task-info { 
+            flex-grow: 1; 
+            font-size: 14px; 
+            min-width: 0; /* Critical for wrapping in flexbox */
+        }
+        .task-title { 
+            line-height: 1.4; 
+            word-wrap: break-word; 
+            overflow-wrap: break-word; 
+            word-break: break-word; 
+        }
+        .task-title.completed { text-decoration: line-through; color: var(--text-secondary); }
+        
+        .task-desc-preview {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .task-meta {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .chip {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .star-icon {
+            font-family: 'Material Icons';
+            font-size: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .star-icon.active { color: #fbbc04; }
+
+        /* --- DETAILS PANEL --- */
+        .details-panel {
+            position: fixed;
+            right: 0; top: 0; bottom: 0;
+            width: 400px;
+            background: var(--surface);
+            border: none;
+            box-shadow: -4px 0 12px rgba(0,0,0,0.15);
+            transform: translateX(100%);
+            transition: transform 0.2s ease;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+        }
+        .details-panel.open { transform: translateX(0); }
+
+        .details-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: none;
+        }
+
+        .details-content {
+            flex-grow: 1;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+        
+        .details-input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-family: inherit;
+            width: 100%;
+        }
+
+        .details-title { font-size: 18px; font-weight: 500; }
+        
+        textarea.details-input {
+            resize: none;
+            min-height: 100px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .details-actions {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .recurrence-day-chip {
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 6px;
+            background: var(--hover);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid var(--border);
+        }
+        .recurrence-day-chip:hover {
+            background: var(--border);
+        }
+        .recurrence-day-chip.active {
+            background: var(--primary);
+            color: white;
+            font-weight: 500;
+            border-color: var(--primary);
+        }
+
+        .recurrence-date-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .recurrence-date-chip {
+            aspect-ratio: 1; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            border-radius: 4px;
+            background: var(--hover);
+            color: var(--text-secondary);
+            cursor: pointer;
+            border: 1px solid var(--border);
+            transition: all 0.23s;
+        }
+        .recurrence-date-chip:hover { background: var(--border); }
+        .recurrence-date-chip.active {
+            background: var(--primary);
+            color: white;
+            font-weight: 500;
+            border-color: var(--primary);
+        }
+
+        /* Premium Select */
+        select.details-input {
+            appearance: none;
+            background: var(--hover);
+            padding: 6px 32px 6px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='gray'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 18px;
+        }
+        select.details-input:hover { background-color: var(--border); }
+
+        /* Sortable Visuals */
+        .sortable-ghost {
+            opacity: 0.4;
+            background: var(--hover);
+            border: 2px dashed var(--border);
+        }
+        .sortable-drag {
+            cursor: grabbing;
+            opacity: 1;
+            background: var(--surface);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            transform: scale(1.02);
+        }
+        
+        /* Dark Mode Toggle Logic via Class */
+        body.dark-theme {
+            --bg-color: #2d2e31;
+            --surface: #101114;
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --border: #3c4043;
+            --hover: #202124;
+            --sidebar-bg: #101114;
+            --shadow: 0 1px 2px 0 rgba(0,0,0,0.8);
+            --scrollbar-thumb: #3c4043;
+            --scrollbar-track: transparent;
+        }
+        
+        /* Light Mode Toggle Logic via Class (Force Light override) */
+        body.light-theme {
+            --primary: #4285f4;
+            --bg-color: #f6f8fc;
+            --surface: #ffffff;
+            --text-primary: #202124;
+            --text-secondary: #5f6368;
+            --border: #dadce0;
+            --hover: #f1f3f4;
+            --sidebar-bg: #ffffff;
+            --shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+            --scrollbar-thumb: #dadce0;
+            --scrollbar-track: transparent;
+        }
+
+        /* --- UTILS --- */
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 10px;
+            border: 2px solid transparent;
+            background-clip: content-box;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: var(--text-secondary);
+            background-clip: content-box;
+        }
+
+        .new-list-column {
+            background: rgba(0,0,0,0.05);
+            min-width: 300px;
+            height: 50px;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--text-secondary);
+        }
+        .new-list-column:hover { background: rgba(0,0,0,0.1); }
+        
+        .hidden { display: none !important; }
+
+        /* Completed Section */
+        .completed-section {
+            border: none;
+            margin-top: 4px;
+        }
+        .completed-header {
+            padding: 10px 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            user-select: none;
+            border-radius: 8px;
+            margin: 4px;
+            transition: background 0.2s;
+        }
+        .completed-header:hover { background: var(--hover); }
+        .completed-arrow {
+            font-size: 20px;
+            margin-right: 10px;
+            transition: transform 0.2s;
+        }
+        .completed-tasks-container {
+            display: none;
+            padding-bottom: 8px;
+        }
+        .completed-tasks-container.open { display: block; }
+        
+        .task-card.completed-task {
+            opacity: 0.8;
+            background: rgba(0,0,0,0.02);
+            box-shadow: none;
+            border-color: transparent;
+        }
+
+        /* --- MODAL --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--modal-overlay);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: var(--surface);
+            padding: 24px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            animation: modalSlide 0.3s ease;
+        }
+        @keyframes modalSlide {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-title { font-size: 18px; font-weight: 500; margin-bottom: 16px; }
+        .modal-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--hover);
+            border: none;
+            border-radius: 12px;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+
+        .modal-actions { display: flex; justify-content: flex-end; gap: 12px; }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .btn-flat { background: transparent; color: var(--primary); }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-flat:hover { background: var(--hover); }
+
+        /* --- TOAST --- */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            background: #323232;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            animation: toastFade 0.3s ease;
+        }
+        @keyframes toastFade {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* --- DROPDOWN MENU --- */
+        .dropdown-menu {
+            position: fixed;
+            background: var(--surface);
+            min-width: 200px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 1000;
+            padding: 8px 0;
+            display: none;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .dropdown-menu.active { display: block; }
+
+        /* Legacy menu ID support */
+        #listMenu, #boardMenu {
+            position: fixed;
+            background: var(--surface);
+            min-width: 200px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 1000;
+            padding: 8px 0;
+            display: none;
+            border: 1px solid var(--border);
+        }
+        #listMenu.active, #boardMenu.active { display: block; }
+        
+        .dropdown-item {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-primary);
+            transition: background 0.2s;
+        }
+        .dropdown-item:hover { background: var(--hover); }
+        .dropdown-item .material-icons { font-size: 20px; color: var(--text-secondary); }
+        
+        .dropdown-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
+        }
+        
+        .dropdown-section-title {
+            padding: 8px 16px;
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .color-picker-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            padding: 8px 16px;
+        }
+        .color-circle {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .color-circle:hover { transform: scale(1.1); }
+        .color-circle.active { border-color: var(--primary); }
+
+        .custom-color-picker {
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .custom-color-picker input[type="color"] {
+            width: 32px;
+            height: 32px;
+            border: none;
+            padding: 0;
+            background: none;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .custom-color-input {
+            flex-grow: 1;
+            background: var(--hover);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            font-size: 13px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <div class="drawer" id="drawer">
+        <div class="drawer-item active" onclick="setView('board')">
+            <span class="drawer-icon">dashboard</span>
+            <span class="drawer-label">Main Board</span>
+        </div>
+        <div class="drawer-item" onclick="setView('due_today')">
+            <span class="drawer-icon">calendar_today</span>
+            <span class="drawer-label">Due today</span>
+        </div>
+        <div class="drawer-item" onclick="setView('starred')">
+            <span class="drawer-icon">star</span>
+            <span class="drawer-label">Starred tasks</span>
+        </div>
+        <div class="drawer-divider"></div>
+        <!-- 
+        <div id="drawerLists"></div> 
+        Removing dynamic lists from sidebar as per user preference for cleaner look 
+        -->
+        <div class="drawer-item" onclick="createNewList()">
+            <span class="drawer-icon">add</span>
+            <span class="drawer-label">Add New List (Current Board)</span>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-section-header">BOARDS</div>
+        <div id="drawerBoards">
+            <!-- Dynamic Boards -->
+        </div>
+        <div class="drawer-item" onclick="createNewBoard()">
+             <span class="drawer-icon">add_box</span>
+             <span class="drawer-label">Create New Board</span>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main-content">
+        <div class="navbar">
+            <div class="menu-btn" onclick="toggleDrawer()">
+                <span class="material-icons">menu</span>
+            </div>
+            <div class="current-view-title" id="viewTitle">Main Board</div>
+            
+            <!-- Toggles -->
+            <button class="nav-icon-btn" onclick="toggleLayout()" title="Switch View (Board/List)">
+                <span class="material-icons" id="layoutIcon">view_column</span>
+            </button>
+            <button class="nav-icon-btn" onclick="toggleTheme()" title="Toggle Theme">
+                <span class="material-icons" id="themeIcon">dark_mode</span>
+            </button>
+            <button class="nav-icon-btn" onclick="window.app.triggerImport()" title="Import Google Tasks (JSON)">
+                <span class="material-icons">file_upload</span>
+            </button>
+            <input type="file" id="importInput" style="display: none;" accept=".json" onchange="window.app.handleImport(event)">
+        </div>
+
+        <div class="board-container" id="boardContainer">
+            <!-- Columns go here -->
+        </div>
+    </div>
+
+    <!-- DETAILS PANEL -->
+    <div class="details-panel" id="detailsPanel">
+        <div class="details-header">
+            <div id="detailsListName" style="font-size: 12px; color: var(--text-secondary);">My Tasks</div>
+            <span class="material-icons" style="cursor: pointer; color: var(--text-secondary);" onclick="closeDetails()">close</span>
+        </div>
+        <div class="details-content">
+            <div style="display: flex; align-items: flex-start;">
+                 <div class="task-checkbox" id="detailsCheck"></div>
+                 <textarea id="detailsTitle" class="details-input details-title" placeholder="Title" rows="1"></textarea>
+                 <span class="material-icons star-icon" id="detailsStar">star_border</span>
+            </div>
+            
+            <div class="details-actions">
+                <span class="material-icons">event</span>
+                <input type="datetime-local" id="detailsDate" class="details-input" style="width: auto;">
+            </div>
+
+            <div class="details-actions">
+                <span class="material-icons">update</span>
+                <select id="detailsRecurrence" class="details-input" style="width: auto; cursor: pointer;" onchange="window.app.toggleRecurrenceDetails()">
+                    <option value="">No Repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+            </div>
+
+            <!-- Advanced Recurrence Options -->
+            <div id="recurrenceDaysContainer" class="details-actions" style="margin-left: 32px; display: none; flex-wrap: wrap; gap: 6px;">
+                <div class="recurrence-day-chip" data-day="0" onclick="this.classList.toggle('active'); window.app.saveDetails()">S</div>
+                <div class="recurrence-day-chip" data-day="1" onclick="this.classList.toggle('active'); window.app.saveDetails()">M</div>
+                <div class="recurrence-day-chip" data-day="2" onclick="this.classList.toggle('active'); window.app.saveDetails()">T</div>
+                <div class="recurrence-day-chip" data-day="3" onclick="this.classList.toggle('active'); window.app.saveDetails()">W</div>
+                <div class="recurrence-day-chip" data-day="4" onclick="this.classList.toggle('active'); window.app.saveDetails()">T</div>
+                <div class="recurrence-day-chip" data-day="5" onclick="this.classList.toggle('active'); window.app.saveDetails()">F</div>
+                <div class="recurrence-day-chip" data-day="6" onclick="this.classList.toggle('active'); window.app.saveDetails()">S</div>
+            </div>
+
+            <div id="recurrenceDateContainer" class="details-actions" style="margin-left: 32px; display: none; flex-direction: column; align-items: flex-start; gap: 8px;">
+                <span style="font-size: 13px; color: var(--text-secondary);">On dates:</span>
+                <div class="recurrence-date-grid" id="recurrenceDateGrid">
+                    <div class="recurrence-date-chip" data-date="1" onclick="this.classList.toggle('active'); window.app.saveDetails()">1</div>
+                    <div class="recurrence-date-chip" data-date="2" onclick="this.classList.toggle('active'); window.app.saveDetails()">2</div>
+                    <div class="recurrence-date-chip" data-date="3" onclick="this.classList.toggle('active'); window.app.saveDetails()">3</div>
+                    <div class="recurrence-date-chip" data-date="4" onclick="this.classList.toggle('active'); window.app.saveDetails()">4</div>
+                    <div class="recurrence-date-chip" data-date="5" onclick="this.classList.toggle('active'); window.app.saveDetails()">5</div>
+                    <div class="recurrence-date-chip" data-date="6" onclick="this.classList.toggle('active'); window.app.saveDetails()">6</div>
+                    <div class="recurrence-date-chip" data-date="7" onclick="this.classList.toggle('active'); window.app.saveDetails()">7</div>
+                    <div class="recurrence-date-chip" data-date="8" onclick="this.classList.toggle('active'); window.app.saveDetails()">8</div>
+                    <div class="recurrence-date-chip" data-date="9" onclick="this.classList.toggle('active'); window.app.saveDetails()">9</div>
+                    <div class="recurrence-date-chip" data-date="10" onclick="this.classList.toggle('active'); window.app.saveDetails()">10</div>
+                    <div class="recurrence-date-chip" data-date="11" onclick="this.classList.toggle('active'); window.app.saveDetails()">11</div>
+                    <div class="recurrence-date-chip" data-date="12" onclick="this.classList.toggle('active'); window.app.saveDetails()">12</div>
+                    <div class="recurrence-date-chip" data-date="13" onclick="this.classList.toggle('active'); window.app.saveDetails()">13</div>
+                    <div class="recurrence-date-chip" data-date="14" onclick="this.classList.toggle('active'); window.app.saveDetails()">14</div>
+                    <div class="recurrence-date-chip" data-date="15" onclick="this.classList.toggle('active'); window.app.saveDetails()">15</div>
+                    <div class="recurrence-date-chip" data-date="16" onclick="this.classList.toggle('active'); window.app.saveDetails()">16</div>
+                    <div class="recurrence-date-chip" data-date="17" onclick="this.classList.toggle('active'); window.app.saveDetails()">17</div>
+                    <div class="recurrence-date-chip" data-date="18" onclick="this.classList.toggle('active'); window.app.saveDetails()">18</div>
+                    <div class="recurrence-date-chip" data-date="19" onclick="this.classList.toggle('active'); window.app.saveDetails()">19</div>
+                    <div class="recurrence-date-chip" data-date="20" onclick="this.classList.toggle('active'); window.app.saveDetails()">20</div>
+                    <div class="recurrence-date-chip" data-date="21" onclick="this.classList.toggle('active'); window.app.saveDetails()">21</div>
+                    <div class="recurrence-date-chip" data-date="22" onclick="this.classList.toggle('active'); window.app.saveDetails()">22</div>
+                    <div class="recurrence-date-chip" data-date="23" onclick="this.classList.toggle('active'); window.app.saveDetails()">23</div>
+                    <div class="recurrence-date-chip" data-date="24" onclick="this.classList.toggle('active'); window.app.saveDetails()">24</div>
+                    <div class="recurrence-date-chip" data-date="25" onclick="this.classList.toggle('active'); window.app.saveDetails()">25</div>
+                    <div class="recurrence-date-chip" data-date="26" onclick="this.classList.toggle('active'); window.app.saveDetails()">26</div>
+                    <div class="recurrence-date-chip" data-date="27" onclick="this.classList.toggle('active'); window.app.saveDetails()">27</div>
+                    <div class="recurrence-date-chip" data-date="28" onclick="this.classList.toggle('active'); window.app.saveDetails()">28</div>
+                    <div class="recurrence-date-chip" data-date="29" onclick="this.classList.toggle('active'); window.app.saveDetails()">29</div>
+                    <div class="recurrence-date-chip" data-date="30" onclick="this.classList.toggle('active'); window.app.saveDetails()">30</div>
+                    <div class="recurrence-date-chip" data-date="31" onclick="this.classList.toggle('active'); window.app.saveDetails()">31</div>
+                </div>
+            </div>
+
+            <div class="details-actions" style="align-items: flex-start;">
+                <span class="material-icons">description</span>
+                <textarea id="detailsDesc" class="details-input" placeholder="Add details"></textarea>
+            </div>
+            
+        </div>
+        <div style="padding: 16px; border: none; text-align: right;">
+            <span class="material-icons" style="cursor: pointer; color: var(--text-secondary);" onclick="deleteCurrentTask()">delete</span>
+        </div>
+    </div>
+    <!-- CUSTOM MODAL -->
+    <div class="modal-overlay" id="customModal">
+        <div class="modal">
+            <div class="modal-title" id="modalTitle">Title</div>
+            <div id="modalContent">
+                <input type="text" id="modalInput" class="modal-input" placeholder="Type here...">
+            </div>
+            <div class="modal-actions">
+                <button id="modalCancel" class="btn btn-flat">Cancel</button>
+                <button id="modalConfirm" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- List Menu Popup -->
+    <div id="listMenu" class="dropdown-menu">
+        <div class="dropdown-item" onclick="window.app.renameListFromMenu()">
+            <span class="material-icons">edit</span> Rename
+        </div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-section-title">List Color</div>
+        <div class="color-picker-grid">
+            <div class="color-circle" style="background: #ffffff;" onclick="window.app.updateListColor('#ffffff')"></div>
+            <div class="color-circle" style="background: #f1f3f4;" onclick="window.app.updateListColor('#f1f3f4')"></div>
+            <div class="color-circle" style="background: #e8f0fe;" onclick="window.app.updateListColor('#e8f0fe')"></div>
+            <div class="color-circle" style="background: #fef7e0;" onclick="window.app.updateListColor('#fef7e0')"></div>
+            <div class="color-circle" style="background: #e6f4ea;" onclick="window.app.updateListColor('#e6f4ea')"></div>
+        </div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item" style="color: #d93025;" onclick="window.app.deleteListFromMenu()">
+            <span class="material-icons" style="color: #d93025;">delete</span> Delete List
+        </div>
+    </div>
+
+    <!-- Board Menu Popup (Content generated in ui.js) -->
+    <div id="boardMenu" class="dropdown-menu"></div>
+
+    <!-- Hidden File Input for Board Background -->
+    <input type="file" id="boardBackgroundInput" accept="image/*" style="display: none;" onchange="window.app.handleBoardBackgroundImageUpload(event)">
+
+    <!-- TOASTS -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
