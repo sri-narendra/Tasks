@@ -67,8 +67,10 @@ const AttachmentSchema = z.object({
   fileType: z.string().optional()
 });
 
-const ReorderSchema = z.object({
-    orderedIds: z.array(objectIdSchema)
+const BulkTaskSchema = z.object({
+    tasks: z.array(TaskSchema.extend({
+        listId: objectIdSchema
+    }))
 });
 
 module.exports = {
@@ -82,5 +84,6 @@ module.exports = {
     TaskSchema,
     UpdateTaskSchema,
     AttachmentSchema,
-    ReorderSchema
+    ReorderSchema,
+    BulkTaskSchema
 };

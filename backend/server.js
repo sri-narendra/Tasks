@@ -237,6 +237,28 @@ app.get('/api/tasks', async (req, res, next) => {
     } catch (err) { next(err); }
 });
 
+app.post('/api/tasks/bulk', 
+    validateSchema(Schemas.BulkTaskSchema), 
+    async (req, res, next) => {
+        try {
+            const { tasks } = req.body;
+            // Verify access to all lists
+            const listIds = [...new Set(tasks.map(t => t.listId))];
+            const lists = await List.find({ _id: { $in: listIds }, user_id: req.user.id, deleted_at: null });
+            if (lists.length !== listIds.length) return res.status(403).json({ error: 'Access denied to one or more lists' });
+
+            const formattedTasks = tasks.map(t => ({
+                ...t,
+                list_id: t.listId,
+                user_id: req.user.id,
+                completed_at: t.completed ? new Date() : null
+            }));
+
+            const result = await Task.insertMany(formattedTasks);
+            res.status(201).json({ count: result.length });
+        } catch (err) { next(err); }
+});
+
 app.post('/api/tasks', 
     validateSchema(Schemas.TaskSchema), 
     authorize(List, { source: 'body', key: 'listId', parent: true }),
@@ -325,9 +347,25 @@ app.get('/health', async (req, res) => {
 
 // Error Handler
 app.use((err, req, res, next) => {
-    logger.error({ err }, 'Request Failed');
-    if (env.NODE_ENV === 'production') res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
-    else res.status(err.status || 500).json({ error: err.message, stack: err.stack });
+    logger.error({ 
+        err: {
+            message: err.message,
+            stack: err.stack,
+            status: err.status,
+            name: err.name,
+            details: err.details // For Zod errors
+        }
+    }, 'Request Failed');
+    
+    if (env.NODE_ENV === 'production') {
+        res.status(err.status || 500).json({ 
+            error: err.message || 'Internal Server Error',
+            // Return Zod details even in prod so user knows why it failed
+            details: err.constructor.name === 'ZodError' ? err.errors : undefined 
+        });
+    } else {
+        res.status(err.status || 500).json({ error: err.message, stack: err.stack, details: err.errors });
+    }
 });
 
 const server = app.listen(port, () => logger.info(`🚀 Server running on ${port}`));
