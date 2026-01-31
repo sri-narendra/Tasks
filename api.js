@@ -13,7 +13,7 @@ export const setAccessToken = (token) => {
 const apiClient = axios.create({
     baseURL: CONFIG.BACKEND_URL + '/api',
     withCredentials: true,
-    timeout: 30000, // 30s timeout for Render cold-starts
+    timeout: 60000, // 60s timeout to handle migration/index builds on free tier
     headers: {
         'Content-Type': 'application/json'
     }

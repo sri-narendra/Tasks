@@ -36,17 +36,27 @@ const port = env.PORT;
 
 const runMigration = async () => {
     try {
+        // Wait 10 seconds before starting migration to let the server start and indices build
+        await new Promise(r => setTimeout(r, 10000)); 
+        
         const count = await Task.countDocuments({ board_id: { $exists: false } });
         if (count > 0) {
             logger.info(`🔧 Migrating ${count} tasks to include board_id...`);
             const lists = await List.find({}, { _id: 1, board_id: 1 });
-            for (const list of lists) {
-                if (list.board_id) {
-                    await Task.updateMany(
-                        { list_id: list._id, board_id: { $exists: false } },
-                        { board_id: list.board_id }
-                    );
-                }
+            
+            // Batch updates to avoid overwhelming the DB connection pool
+            const BATCH_SIZE = 10;
+            for (let i = 0; i < lists.length; i += BATCH_SIZE) {
+                const batch = lists.slice(i, i + BATCH_SIZE);
+                await Promise.all(batch.map(list => {
+                    if (list.board_id) {
+                        return Task.updateMany(
+                            { list_id: list._id, board_id: { $exists: false } },
+                            { board_id: list.board_id }
+                        );
+                    }
+                    return Promise.resolve();
+                }));
             }
             logger.info('✅ Task migration complete');
         }

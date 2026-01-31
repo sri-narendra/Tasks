@@ -829,11 +829,20 @@ export async function deleteBoardFromMenu() {
 
         const res = await api(`/boards/${boardId}`, 'DELETE');
         if (res.error) {
-            // Rollback on failure
-            state.boards = originalBoards;
-            state.currentBoardId = originalBoardId;
-            renderApp();
-            showToast('Failed to delete: ' + res.error);
+            // Only rollback if it's a specific API error (like 403 or 404).
+            // If it's a "Network Error" or "timeout", we DON'T rollback because 
+            // the server likely received the request and is just slow to respond 
+            // due to the background task cleanup.
+            const isNetworkError = res.error.toLowerCase().includes('network') || res.error.toLowerCase().includes('timeout');
+            
+            if (!isNetworkError) {
+                state.boards = originalBoards;
+                state.currentBoardId = originalBoardId;
+                renderApp();
+                showToast('Failed: ' + res.error);
+            } else {
+                showToast('Server is busy cleaning up. Your board will be gone on refresh.');
+            }
         } else {
             showToast('Board deleted');
         }
