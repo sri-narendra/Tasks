@@ -782,8 +782,8 @@ export async function handleBoardBackgroundImageUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (file.size > 50 * 1024 * 1024) {
-        showToast("Image too large (max 50MB)");
+    if (file.size > 10 * 1024 * 1024) {
+        showToast("Image too large (max 10MB)");
         return;
     }
 

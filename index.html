@@ -1159,20 +1159,20 @@
 
     <!-- List Menu Popup -->
     <div id="listMenu" class="dropdown-menu">
-        <div class="dropdown-item" onclick="app.renameListFromMenu()">
+        <div class="dropdown-item" onclick="window.app.renameListFromMenu()">
             <span class="material-icons">edit</span> Rename
         </div>
         <div class="dropdown-divider"></div>
         <div class="dropdown-section-title">List Color</div>
         <div class="color-picker-grid">
-            <div class="color-circle" style="background: #ffffff;" onclick="app.updateListColor('#ffffff')"></div>
-            <div class="color-circle" style="background: #f1f3f4;" onclick="app.updateListColor('#f1f3f4')"></div>
-            <div class="color-circle" style="background: #e8f0fe;" onclick="app.updateListColor('#e8f0fe')"></div>
-            <div class="color-circle" style="background: #fef7e0;" onclick="app.updateListColor('#fef7e0')"></div>
-            <div class="color-circle" style="background: #e6f4ea;" onclick="app.updateListColor('#e6f4ea')"></div>
+            <div class="color-circle" style="background: #ffffff;" onclick="window.app.updateListColor('#ffffff')"></div>
+            <div class="color-circle" style="background: #f1f3f4;" onclick="window.app.updateListColor('#f1f3f4')"></div>
+            <div class="color-circle" style="background: #e8f0fe;" onclick="window.app.updateListColor('#e8f0fe')"></div>
+            <div class="color-circle" style="background: #fef7e0;" onclick="window.app.updateListColor('#fef7e0')"></div>
+            <div class="color-circle" style="background: #e6f4ea;" onclick="window.app.updateListColor('#e6f4ea')"></div>
         </div>
         <div class="dropdown-divider"></div>
-        <div class="dropdown-item" style="color: #d93025;" onclick="app.deleteListFromMenu()">
+        <div class="dropdown-item" style="color: #d93025;" onclick="window.app.deleteListFromMenu()">
             <span class="material-icons" style="color: #d93025;">delete</span> Delete List
         </div>
     </div>
@@ -1183,13 +1183,13 @@
     <!-- Profile Menu -->
     <div id="profileMenu" class="dropdown-menu" style="width: 200px;">
         <div class="dropdown-section-title">Account</div>
-        <div class="dropdown-item" onclick="app.logout()">
+        <div class="dropdown-item" onclick="window.app.logout()">
             <span class="material-icons">logout</span> Logout
         </div>
         <div class="dropdown-divider"></div>
         <div class="dropdown-section-title">Theme</div>
         <div style="padding: 0 16px 8px 16px;">
-            <select id="themeSelector" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary);" onchange="app.setCustomTheme(this.value)">
+            <select id="themeSelector" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary);" onchange="window.app.setCustomTheme(this.value)">
                 <option value="default">Default (Blue/Grey)</option>
                 <option value="midnight">Midnight (Purple)</option>
                 <option value="forest">Forest (Green)</option>
@@ -1199,7 +1199,7 @@
     </div>
 
     <!-- Hidden File Input for Board Background -->
-    <input type="file" id="boardBackgroundInput" accept="image/*" style="display: none;" onchange="app.handleBoardBackgroundImageUpload(event)">
+    <input type="file" id="boardBackgroundInput" accept="image/*" style="display: none;" onchange="window.app.handleBoardBackgroundImageUpload(event)">
 
     <!-- TOASTS -->
     <div class="toast-container" id="toastContainer"></div>
