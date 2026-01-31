@@ -817,13 +817,26 @@ export async function deleteBoardFromMenu() {
     const boardId = state.activeBoardId;
     const confirmed = await showModal({ title: 'Delete board and all its tasks? This cannot be undone.', showInput: false });
     if (confirmed) {
+        const originalBoards = [...state.boards];
+        const originalBoardId = state.currentBoardId;
+
+        // Optimistic UI Update
         state.boards = state.boards.filter(b => b.id !== boardId);
         if (state.currentBoardId === boardId) {
             state.currentBoardId = state.boards.length > 0 ? state.boards[0].id : null;
         }
         renderApp();
-        await api(`/boards/${boardId}`, 'DELETE');
-        showToast('Board deleted');
+
+        const res = await api(`/boards/${boardId}`, 'DELETE');
+        if (res.error) {
+            // Rollback on failure
+            state.boards = originalBoards;
+            state.currentBoardId = originalBoardId;
+            renderApp();
+            showToast('Failed to delete: ' + res.error);
+        } else {
+            showToast('Board deleted');
+        }
     }
 }
 

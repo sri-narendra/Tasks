@@ -34,15 +34,55 @@ const validateSchema = (schema) => (req, res, next) => {
 const app = express();
 const port = env.PORT;
 
+const runMigration = async () => {
+    try {
+        const count = await Task.countDocuments({ board_id: { $exists: false } });
+        if (count > 0) {
+            logger.info(`🔧 Migrating ${count} tasks to include board_id...`);
+            const lists = await List.find({}, { _id: 1, board_id: 1 });
+            for (const list of lists) {
+                if (list.board_id) {
+                    await Task.updateMany(
+                        { list_id: list._id, board_id: { $exists: false } },
+                        { board_id: list.board_id }
+                    );
+                }
+            }
+            logger.info('✅ Task migration complete');
+        }
+    } catch (err) {
+        logger.error({ err }, '❌ Task migration failed');
+    }
+};
+
 // --- DB Connection ---
+// --- MIGRATION: Denormalize board_id on Tasks ---
 mongoose.connect(env.MONGODB_URI, {
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
-}).then(() => logger.info('✅ Connected to MongoDB'))
-  .catch(err => {
-      logger.fatal({ err }, '❌ MongoDB connection error');
-      process.exit(1);
-  });
+}).then(() => {
+    logger.info('✅ Connected to MongoDB');
+    runMigration(); // Run in background after connection
+    
+    // Start listening only AFTER DB is ready
+    const server = app.listen(port, () => logger.info(`🚀 Server running on ${port}`));
+    
+    // HTTP keep-alive timeouts (Render Load Balancer Affinity)
+    server.keepAliveTimeout = 65000; 
+    server.headersTimeout = 66000;
+
+    // Socket Tracking for Graceful Shutdown
+    server.on('connection', (socket) => {
+        connections.add(socket);
+        socket.on('close', () => connections.delete(socket));
+    });
+
+    // Provide the server instance to the global scope for the shutdown handler
+    global.serverInstance = server;
+}).catch(err => {
+    logger.fatal({ err }, '❌ MongoDB connection error');
+    process.exit(1);
+});
 
 // --- Middleware ---
 // --- Middleware & Safety ---
@@ -142,26 +182,7 @@ app.post('/api/boards', validateSchema(Schemas.BoardSchema), async (req, res, ne
     } catch (err) { next(err); }
 });
 
-// --- MIGRATION: Denormalize board_id on Tasks ---
-(async () => {
-    try {
-        await mongoose.connection.asPromise(); // Ensure DB is ready
-        const count = await Task.countDocuments({ board_id: { $exists: false } });
-        if (count > 0) {
-            logger.info(`🔧 Migrating ${count} tasks to include board_id...`);
-            const lists = await List.find({}, { _id: 1, board_id: 1 });
-            for (const list of lists) {
-                await Task.updateMany(
-                    { list_id: list._id, board_id: { $exists: false } },
-                    { board_id: list.board_id }
-                );
-            }
-            logger.info('✅ Task migration complete');
-        }
-    } catch (err) {
-        logger.error({ err }, '❌ Task migration failed');
-    }
-})();
+// Delete logic removed from here as it's now handled in the Connect then block
 
 app.patch('/api/boards/:id', 
     validateSchema(Schemas.UpdateBoardSchema), 
@@ -412,23 +433,20 @@ app.use((err, req, res, next) => {
     }
 });
 
-const server = app.listen(port, () => logger.info(`🚀 Server running on ${port}`));
-
-// HTTP keep-alive timeouts (Render Load Balancer Affinity)
-server.keepAliveTimeout = 65000; 
-server.headersTimeout = 66000;
-
-// Socket Tracking for Graceful Shutdown
 const connections = new Set();
-server.on('connection', (socket) => {
-    connections.add(socket);
-    socket.on('close', () => connections.delete(socket));
-});
+
+// Server definition moved to mongoose.connect().then()
 
 // Shutdown Handler
 const gracefulShutdown = (signal) => {
     logger.info({ signal }, 'Received shutdown signal. Starting graceful drain...');
     
+    const server = global.serverInstance;
+    if (!server) {
+        process.exit(0);
+        return;
+    }
+
     // 1. Stop accepting new connections
     server.close(() => {
         logger.info('HTTP server closed. Finalizing DB connections...');
