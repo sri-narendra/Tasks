@@ -90,6 +90,7 @@ const TaskSchema = new Schema({
     is_starred: { type: Boolean, default: false },
     position: { type: Number, default: 0 },
     list_id: { type: Schema.Types.ObjectId, ref: 'List', required: true },
+    board_id: { type: Schema.Types.ObjectId, ref: 'Board', index: true }, // Denormalized for perf
     user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     parent_id: { type: Schema.Types.ObjectId, ref: 'Task' },
     completed_at: { type: Date },
@@ -98,11 +99,12 @@ const TaskSchema = new Schema({
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
     toJSON: { virtuals: true, transform: toJSONTransform }
 });
+TaskSchema.index({ board_id: 1, user_id: 1, deleted_at: 1 }); // FAST Board deletion & fetch
 TaskSchema.index({ list_id: 1, user_id: 1, deleted_at: 1 });
 TaskSchema.index({ user_id: 1, _id: 1 });
 TaskSchema.index({ parent_id: 1 });
-TaskSchema.index({ user_id: 1, deleted_at: 1, list_id: 1 }); // Fast list-to-task mapping
-TaskSchema.index({ user_id: 1, deleted_at: 1, completed: 1 }); // For archive/dashboard views
+TaskSchema.index({ user_id: 1, deleted_at: 1, list_id: 1 }); 
+TaskSchema.index({ user_id: 1, deleted_at: 1, completed: 1 });
 
 // --- ATTACHMENT ---
 const AttachmentSchema = new Schema({

@@ -142,6 +142,27 @@ app.post('/api/boards', validateSchema(Schemas.BoardSchema), async (req, res, ne
     } catch (err) { next(err); }
 });
 
+// --- MIGRATION: Denormalize board_id on Tasks ---
+(async () => {
+    try {
+        await mongoose.connection.asPromise(); // Ensure DB is ready
+        const count = await Task.countDocuments({ board_id: { $exists: false } });
+        if (count > 0) {
+            logger.info(`🔧 Migrating ${count} tasks to include board_id...`);
+            const lists = await List.find({}, { _id: 1, board_id: 1 });
+            for (const list of lists) {
+                await Task.updateMany(
+                    { list_id: list._id, board_id: { $exists: false } },
+                    { board_id: list.board_id }
+                );
+            }
+            logger.info('✅ Task migration complete');
+        }
+    } catch (err) {
+        logger.error({ err }, '❌ Task migration failed');
+    }
+})();
+
 app.patch('/api/boards/:id', 
     validateSchema(Schemas.UpdateBoardSchema), 
     authorize(Board), 
@@ -161,19 +182,15 @@ app.delete('/api/boards/:id', authorize(Board), async (req, res, next) => {
         const boardId = req.params.id;
         const now = new Date();
 
-        // 1. Soft Delete Board
-        await Board.updateOne({ _id: boardId }, { deleted_at: now });
+        // 1. Mark Board as deleted immediately to hide it from UI
+        await Board.updateOne({ _id: boardId, user_id: req.user.id }, { deleted_at: now });
 
-        // 2. Soft Delete Lists and get their IDs
-        const lists = await List.find({ board_id: boardId, user_id: req.user.id }, { _id: 1 });
-        const listIds = lists.map(l => l._id);
-
-        await List.updateMany({ board_id: boardId }, { deleted_at: now });
-
-        // 3. Soft Delete Tasks in those lists
-        if (listIds.length > 0) {
-            await Task.updateMany({ list_id: { $in: listIds } }, { deleted_at: now });
-        }
+        // 2. Cascade soft-delete lists and tasks in background to prevent timeout
+        // Denormalized board_id makes this extremely fast, but we still background it for safety
+        Promise.all([
+            List.updateMany({ board_id: boardId }, { deleted_at: now }),
+            Task.updateMany({ board_id: boardId }, { deleted_at: now })
+        ]).catch(err => logger.error({ err, boardId }, 'Cascade delete partially failed'));
 
         res.json({ success: true });
     } catch (err) { next(err); }
@@ -245,10 +262,8 @@ app.get('/api/tasks', async (req, res, next) => {
         if (listId) {
             query.list_id = listId;
         } else if (boardId) {
-            // Find all lists for this board first
-            const lists = await List.find({ board_id: boardId, user_id: req.user.id, deleted_at: null }, { _id: 1 });
-            const listIds = lists.map(l => l._id);
-            query.list_id = { $in: listIds };
+            // Using denormalized board_id - VERY fast indexed query
+            query.board_id = boardId;
         }
 
         const tasks = await Task.find(query).sort({ position: 1 });
@@ -261,14 +276,17 @@ app.post('/api/tasks/bulk',
     async (req, res, next) => {
         try {
             const { tasks } = req.body;
-            // Verify access to all lists
+            // Verify access to all lists and get their board IDs
             const listIds = [...new Set(tasks.map(t => t.listId))];
             const lists = await List.find({ _id: { $in: listIds }, user_id: req.user.id, deleted_at: null });
             if (lists.length !== listIds.length) return res.status(403).json({ error: 'Access denied to one or more lists' });
 
+            const listToBoardMap = Object.fromEntries(lists.map(l => [l._id.toString(), l.board_id]));
+
             const formattedTasks = tasks.map(t => ({
                 ...t,
                 list_id: t.listId,
+                board_id: listToBoardMap[t.listId], // Inherit boardId from list
                 user_id: req.user.id,
                 completed_at: t.completed ? new Date() : null
             }));
@@ -283,12 +301,19 @@ app.post('/api/tasks',
     authorize(List, { source: 'body', key: 'listId', parent: true }),
     async (req, res, next) => {
         try {
+            const list = req.resources.list;
             // Also authorize parent task if subtask
             if (req.body.parent_id) {
                 const parent = await Task.findOne({ _id: req.body.parent_id, user_id: req.user.id, deleted_at: null });
                 if (!parent) return res.status(404).json({ error: 'Parent task not found' });
             }
-            const task = new Task({ ...req.body, list_id: req.body.listId, user_id: req.user.id, completed_at: req.body.completed ? new Date() : null });
+            const task = new Task({ 
+                ...req.body, 
+                list_id: req.body.listId, 
+                board_id: list.board_id, // Store board_id on task
+                user_id: req.user.id, 
+                completed_at: req.body.completed ? new Date() : null 
+            });
             await task.save();
             res.status(201).json(task);
         } catch (err) { next(err); }
